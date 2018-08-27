@@ -1,12 +1,11 @@
 # simpleST
 
-##############################################################
 simpleST version 1.0
 Copyright (c) 2018 Martin Fahrenberger.
 This wrapper is free software and comes with ABSOLUTELY NO WARRANTY.
-##############################################################
+
 This pipeline processes .sra data files as produced using the Spatial Transciptomics protocol by Stahl and Salmen et al. (STAHL, Patrik L., et al. Visualization and analysis of gene expression in tissue sections by spatial transcriptomics. Science, 2016).
-##############################################################
+
 This pipeline uses the following software:
 fastq-dump:
 Part of NCBI's SRA-toolkit
@@ -22,9 +21,9 @@ samtools:
 general SAM and BAM file handling (LI, Heng, et al. The sequence alignment/map format and SAMtools. Bioinformatics, 2009)
 umi-tools:
 UMI deduplication (SMITH, Tom Sean; HEGER, Andreas; SUDBERY, Ian. UMI-tools: Modelling sequencing errors in Unique Molecular Identifiers to improve quantification accuracy. Genome research, 2017)
-##############################################################
+
 USAGE EXAMPLE:
-##############################################################
+
 simpleST.sh -i <SRA-Input-File> -g <reference_gff> -r <reference_STAR_genome_index_dir> -o <outout_dir> -b <barcode_file> -u <UBD_directory> -p <barcode_buckets_path> -n <number_of_cores>
 -i		SRA Input file from Spatial_Transcriptomics experiment
 -g		Reference genome gff file (same as used for genome index build)
