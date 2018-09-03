@@ -100,42 +100,69 @@ Run_pipeline(){
 
 	RRNAME=$(echo $RRFILE | rev | cut -f1 -d/ | cut -f2 -d. | rev)
 
-	echo demultiplexing $RRNAME
+	echo processing $RRNAME
 	mkdir -p $OUTPATH/fastq/$RRNAME
-
+	echo "$(date) Starting fastq-dump"
 	fastq-dump --unaligned --split-3 $RRFILE -O $OUTPATH/fastq/$RRNAME/
 
 	cd $OUTPATH/fastq/$RRNAME/
+		echo "$(date) Starting split"
 		split -l 10000000 -d --additional-suffix=.fastq  ${RRNAME}_1.fastq ${RRNAME}_1_
 		split -l 10000000 -d --additional-suffix=.fastq  ${RRNAME}_2.fastq ${RRNAME}_2_
 		rm ${RRNAME}_1.fastq
 		rm ${RRNAME}_2.fastq
 		FILESTMP=($(ls ./*.fastq | grep _1_))
+		echo "$(date) Starting UBD demulitplexing"
 		for k in ${FILESTMP[@]}; do
 		    $UBDPATH/findIndexes -p ${k//_1_/_2_} $BCFILE ./$k ./${k//_1_/}_bc -l 18 >> ./UBD_mapping_stats.txt 
 		    rm $k
 		    rm ${k//_1_/_2_}
 		done
+		echo "$(date) Starting python sorting script"
 		python3 $BUCKETPATH ./
 		rm *_bc*
 	cd ../../
 
-	EXTRACTED_FILES=($(find $OUTPATH/fastq/$RRNAME/assigned/ -name "*_2_.fastq"))
-	EXTRACTED_NAMES=($(find $OUTPATH/fastq/$RRNAME/assigned/ -name "*_2_.fastq" | rev | cut -f1 -d/ | rev | cut -f1 -d_))
+	echo "$(date) Starting fastx_trimmer"
+
+	BARCODE_FILES=($(find $OUTPATH/fastq/$RRNAME/assigned/ -name "*_1_.fastq"))
+
+	for i in ${BARCODE_FILES[@]}; do
+		fastx_trimmer -f 19 -l 26 -i $i  -o $i.trimmed
+		rm $i
+	done
+	echo "$(date) Starting umi_tools extract"
+	TRIMMED_FILES=($(find $OUTPATH/fastq/$RRNAME/assigned/ -name "*_1_.fastq.trimmed"))
+	for i in ${TRIMMED_FILES[@]]}; do
+		TMP_FILE_2=${i//_1_/_2_}
+		umi_tools extract --bc-pattern=NNNNNNNN \
+		              --stdin $i \
+		              --stdout $i.extracted \
+		              --read2-in ${TMP_FILE_2//.trimmed/} \
+		              --read2-out=${TMP_FILE_2//.trimmed/}.extracted \
+		              >> $OUTPATH/fastq/$RRNAME/assigned/extraction_stats.txt
+		rm $i.extracted
+		rm $i
+		rm ${TMP_FILE_2//.trimmed/}
+	done
 
 
-	echo creating STAR alignment
+	echo "$(date) Starting STAR alignments"
 
-	mkdir $OUTPATH/alignment/
-	mkdir $OUTPATH/alignment/STAR/
-	mkdir $OUTPATH/alignment/STAR/$RRNAME/
+	EXTRACTED_FILES=($(find $OUTPATH/fastq/$RRNAME/assigned/ -name "*_2_.fastq.extracted"))
+	EXTRACTED_NAMES=($(find $OUTPATH/fastq/$RRNAME/assigned/ -name "*_2_.fastq.extracted" | rev | cut -f1 -d/ | rev | cut -f1 -d_))
+
+
+	mkdir -p $OUTPATH/alignment/STAR/$RRNAME/
 	for j in `seq 1 ${#EXTRACTED_FILES[@]}`; do
 		i=$(expr $j - 1)
-		mkdir $OUTPATH/alignment/STAR/$RRNAME/${EXTRACTED_NAMES[$i]}/
+		mkdir -p $OUTPATH/alignment/STAR/$RRNAME/${EXTRACTED_NAMES[$i]}/
 		STAR --genomeDir $REFDIR --readFilesIn ${EXTRACTED_FILES[$i]} --runThreadN $NCORES --outSAMtype BAM SortedByCoordinate --outFileNamePrefix $OUTPATH/alignment/STAR/$RRNAME/${EXTRACTED_NAMES[$i]}/
 	done
 
-	echo running umi_tools
+
+
+	echo "$(date) Starting umi_tools dedup (with featureCounts and samtools)"
 
 	ASSIGNED_FOLDERS=($(ls -d $OUTPATH/alignment/STAR/$RRNAME/*))
 	for i in ${ASSIGNED_FOLDERS[@]}; do
